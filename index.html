@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 13px Helvetica, Arial; background: #000 }
+
+      div#nickname { position: absolute; top: 50%; transform: translateY(-50%); display: block; width: 100%; }
+      #nickname * {background: #000; color: white; text-align: center; font-size: 40px; font-style: italic; }
+      #nickname input { width:100%; height: 100px; font-size: 100px; border: none; font-style: normal; }
+      #nickname input:focus { outline: none; padding-top: 0; }
+
+      #messages ul { overflow: scroll; position: fixed; top: 0; bottom: 39px; width: 100%; }
+      #messages form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+      #messages form input { border: 0; padding: 10px; width: 90%; margin-right: .5%; }
+      #messages form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+      #messages ul { list-style-type: none; margin: 0; padding: 0; }
+      #messages ul li { padding: 5px 10px; }
+      #messages ul li:nth-child(odd) { background: #eee; }
+      #messages ul li.user-activity { text-align: center; font-weight: bold; }
+      #messages ul li span { color: #337ab7 }
+      .circle {
+        background: #337ab7;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-left: 5px;
+      }
+      @keyframes dot-1 { from { opacity: 0; } 25% { opacity: 1; }}
+      @keyframes dot-2 { from { opacity: 0; } 50% { opacity: 1; }}
+      @keyframes dot-3 { from { opacity: 0; } 75% { opacity: 1; }}
+      @-webkit-keyframes dot-1 { from { opacity: 0; } 25% { opacity: 1; }}
+      @-webkit-keyframes dot-2 { from { opacity: 0; } 50% { opacity: 1; }}
+      @-webkit-keyframes dot-3 { from { opacity: 0; } 75% { opacity: 1; }}
+      div.typing {
+        display: inline-block;
+      }
+      div.typing div {
+        animation: dot-1 1.5s infinite steps(1);
+        -webkit-animation: dot-1 1.5s infinite steps(1);
+      }
+      div.typing div:first-child + div {
+        animation-name: dot-2;
+        -webkit-name: dot-2;
+      }
+      div.typing div:first-child + div + div {
+        animation-name: dot-3;
+        -webkit-name: dot-3;
+      }
+    </style>
+<script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+<script src="http://code.jquery.com/jquery-1.11.1.js"></script>
+<script>
+  $(document).ready(function() {
+    var socket = io();
+    $('#messages form').submit(function(){
+      var msg = $('#m').val();
+      socket.emit('chat message', msg);
+      $('#m').val('');
+      $('#messages ul').append($('<li>').text(msg));
+      $('#messages ul').scrollTop($('#messages ul')[0].scrollHeight);
+      return false;
+    });
+
+    var typewatch = (function() {
+      var timer = 0,
+          typing = false;
+      return function() {
+        clearTimeout(timer);
+        if (!typing) {
+          typing = true;
+          socket.emit('user activity', {typing: true});
+        }
+        timer = setTimeout(function() {
+          typing = false;
+          socket.emit('user activity', {typing: false});
+        }, 1000);
+      }
+    })();
+
+    $('#m').keypress(function() {
+      typewatch();      
+    });
+
+    socket.on('chat message', function(msg){
+      $('li[socketid=' + msg.socketid + ']').remove();
+      $('#messages ul').append('<li><span>' + msg.nickname + ':</span> ' + msg.message + '</li>');
+      $('#messages ul').scrollTop($('#messages ul')[0].scrollHeight);
+    });
+
+    socket.on('user activity', function(userActivity) {
+      if (userActivity.typing !== undefined) {
+        if (userActivity.typing && $('li[socketid=' + userActivity.socketid + ']').length === 0) {
+          $('#messages ul').append('<li socketid="' + userActivity.socketid + '"><span>' + userActivity.nickname + ':</span><div class="typing"><div class="circle"></div><div class="circle"></div><div class="circle"></div></div></li>');
+        $('#messages ul').scrollTop($('#messages ul')[0].scrollHeight);
+        } else {
+          $('li[socketid=' + userActivity.socketid + ']').remove();
+        }
+      } else if (userActivity.nickname) {
+        $('#messages ul').append($('<li class="user-activity"><span>' + userActivity.nickname + '</span> entered the chat room!</li>'));
+        $('#messages ul').scrollTop($('#messages ul')[0].scrollHeight);
+      } else if (userActivity.disconnect) {
+        $('#messages ul').append('<li class="user-activity"><span>' + userActivity.disconnect + '</span> left the chat room.</li>');
+        $('#messages ul').scrollTop($('#messages ul')[0].scrollHeight);
+      }
+    });
+
+    $('#nickname form').submit(function() {
+      var nickname = $('#nickname input').val();
+      if (nickname) {
+        socket.emit('user activity', {nickname: nickname});
+        $('#nickname').hide(500);;
+        $('body').css('background-color', 'white')
+        $('#messages').show(500);
+      }
+      return false;
+    });
+    $('#messages').hide();
+    $('#nickname input').focus();
+  });
+</script>
+  </head>
+  <body>
+    <div id="nickname">
+      <p>Your nickname:</p>
+      <form action="">
+        <input type="text" autocomplete="off" />
+      </form>
+    </div>
+    <div id="messages">
+      <ul></ul>
+      <form action="">
+        <input id="m" autocomplete="off" /><button>Send</button>
+      </form>
+    </div>
+  </body>
+</html>
